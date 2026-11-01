@@ -8,4 +8,4 @@ Rezervační tlačítka vedou do oficiálního systému Reservanto pro Znojmo. R
 
 Publikace: větev `main`, kořen repozitáře; `.nojekyll`.
 
-Logo, fotografie a fonty pocházejí z veřejných podkladů BodyExpress. Síťové fotografie jsou označené jako ukázky EMS a nepředstavují doložený personál nebo interiér Znojma.
+Logo, síťové fotografie a fonty pocházejí z veřejných podkladů BodyExpress. Úvodní vizuál je označená AI ilustrace. Síťové fotografie jsou označené jako ukázky EMS a nepředstavují doložený personál nebo interiér Znojma.
