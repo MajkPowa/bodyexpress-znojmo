@@ -1,0 +1,76 @@
+'use strict';
+(() => {
+  const text = document.getElementById('order-status');
+  const heading = document.getElementById('order-heading');
+  const retry = document.getElementById('retry-status');
+  const config = window.BODYEXPRESS_CONFIG || {};
+  const session = new URLSearchParams(location.search).get('session_id') || '';
+  const revoke = document.createElement('button');
+  revoke.type = 'button';
+  revoke.textContent = 'Odvolat souhlas s měřením nákupu';
+  revoke.hidden = true;
+  document.querySelector('.actions').after(revoke);
+  const revokeStatus = document.createElement('p');
+  revokeStatus.setAttribute('role','status');
+  revoke.after(revokeStatus);
+  let verifiedEndpoint = '';
+  revoke.addEventListener('click', async () => {
+    if (!verifiedEndpoint) return;
+    revoke.disabled = true;
+    try {
+      const response = await fetch(`${verifiedEndpoint}/api/orders/marketing-consent?session_id=${encodeURIComponent(session)}`, {method:'DELETE',credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)});
+      const result = await response.json();
+      if (!response.ok || result.revoked !== true) throw new Error('Not revoked');
+      revoke.hidden = true;
+      revokeStatus.textContent = 'Souhlas s měřením této objednávky byl odvolán. Zakoupená lekce se tím neruší.';
+    } catch {
+      revokeStatus.textContent = 'Odvolání se nepodařilo potvrdit. Zkuste to znovu nebo kontaktujte studio.';
+      revoke.disabled = false;
+    }
+  });
+  async function check() {
+    retry.hidden = true;
+    if (!config.apiEnabled) {
+      heading.textContent = 'Online platbu připravujeme';
+      text.textContent = 'Tento náhled není připojený k platebnímu systému. Žádnou platbu ani termín zde nepotvrzujeme.';
+      return;
+    }
+    if (!/^cs_(?:test_|live_)?[A-Za-z0-9]{12,240}$/.test(session)) {
+      heading.textContent = 'Chybí odkaz k objednávce';
+      text.textContent = 'Použijte návratový odkaz z platby nebo se obraťte na studio. Neopakujte platbu bez ověření.';
+      return;
+    }
+    text.textContent = 'Ověřujeme stav platby…';
+    try {
+      const base = new URL(config.apiBase || '/', location.origin);
+      if (base.origin !== location.origin) throw new Error('Same-origin API required');
+      const response = await fetch(`${base.href.replace(/\/$/,'')}/api/orders/status?session_id=${encodeURIComponent(session)}`, {credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)});
+      if (!response.ok) throw new Error('Not verified');
+      const order = await response.json();
+      if (!['pending','paid','expired','failed','partially_refunded','refunded'].includes(order.status)) throw new Error('Invalid status');
+      verifiedEndpoint = base.href.replace(/\/$/,'');
+      revoke.hidden = false;
+      if (order.status === 'paid' && order.paid === true) {
+        if (typeof order.testMode !== 'boolean') throw new Error('Unverified payment mode');
+        heading.textContent = order.testMode ? 'Testovací platba je potvrzená' : 'Platba je potvrzená';
+        text.textContent = order.testMode ? 'Proběhla pouze testovací platba Stripe. Nevznikla skutečná úhrada, objednávka lekce ani rezervace termínu.' : 'Děkujeme za úhradu první lekce. Zavolejte nám a společně vybereme termín. Termín zatím není potvrzený.';
+      } else if (['refunded','partially_refunded'].includes(order.status)) {
+        heading.textContent = 'Platba byla vrácena';
+        text.textContent = order.status === 'refunded' ? 'Úhrada byla vrácena v plné výši. Podrobnosti ověřte se studiem.' : 'Část úhrady byla vrácena. Podrobnosti ověřte se studiem.';
+      } else if (['expired','failed'].includes(order.status)) {
+        heading.textContent = 'Platba není potvrzená';
+        text.textContent = 'Platba nebyla dokončena nebo platnost odkazu vypršela. Pokud byla částka stržena, nejprve kontaktujte studio.';
+      } else {
+        heading.textContent = 'Čekáme na potvrzení platby';
+        text.textContent = 'Potvrzení může chvíli trvat. Zkuste stav znovu ověřit. Platbu zatím neopakujte.';
+        retry.hidden = false;
+      }
+    } catch {
+      heading.textContent = 'Platbu se nepodařilo ověřit';
+      text.textContent = 'To neznamená, že platba neproběhla. Zkuste ověření znovu nebo zavolejte do studia. Platbu zatím neopakujte.';
+      retry.hidden = false;
+    }
+  }
+  retry.addEventListener('click',check);
+  check();
+})();
